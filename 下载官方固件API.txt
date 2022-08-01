@@ -1,0 +1,13 @@
+原帖：https://forum.openwrt.org/t/xiaomi-ax3600-int-firmware/74276
+
+http://api.miwifi.com/upgrade/log/list?typeList=RA69STA
+
+
+Q:how did you find that the name of the router is R3600STA ?
+A:from here http://www1.miwifi.com/statics/js/miwifi_js.js?20200225
+
+
+Q:if there is anyway that I can find the device name from my router / the logs given from the Xiaomi's GUI let me know.
+A:maybe worth a try:
+http://192.168.31.1/cgi-bin/luci/;stok=<YOU_STOK>/api/xqsystem/init_info
+http://192.168.31.1/cgi-bin/luci/;stok=<YOU_STOK>/api/misystem/sys_log

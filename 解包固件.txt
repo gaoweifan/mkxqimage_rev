@@ -1,0 +1,19 @@
+参考https://x1ng.top/2020/12/16/%E5%B0%8F%E7%B1%B3%E8%B7%AF%E7%94%B1%E5%99%A8-%E9%80%BB%E8%BE%91%E6%BC%8F%E6%B4%9E%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0/
+
+$pip install ubi_reader
+$pip install binwalk
+
+$binwalk -Me miwifi_rb06_firmware_7ddeb_1.0.60_2022-07-18.bin
+手动删掉末尾272多余字节（用winhex即可）
+或者也可用$mkxqimage -x miwifi_rb06_firmware_7ddeb_1.0.60_2022-07-18.bin解包
+$ubireader_extract_images firmware_ubi.bin
+可得到rootfs.ubifs和kernel.ubifs
+
+rootfs.ubifs用unsquashfs解包
+$unsquashfs ./img-665699198_vol-rootfs.ubifs
+
+kernel.ubifs是dtb封装的kernel与真实dtb，先用dtc得到kernel.dts
+$dtc -I dtb -O dts -o kernel.dts img-665699198_vol-kernel.ubifs
+再手动将dts内部data的十六进制数据转换成文件
+即可得到真实的kernel与dtb
+也可直接$binwalk -Me img-665699198_vol-kernel.ubi得到
