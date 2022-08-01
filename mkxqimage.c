@@ -59,15 +59,15 @@ int command_get_image_version(const char *a1);
 int command_get_ssh_key();
 unsigned int crc32_update(uint8_t *buf, int64_t size, unsigned int state);
 uint32_t calc_crc32(FILE *f, int start, unsigned int size);
-int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh); // idb
-int j_verify_rsa(FILE *f, unsigned int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh);
-int verify_rsa(FILE *f, int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh);
+int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh, char isSHA256); // idb
+int j_verify_rsa(FILE *f, unsigned int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh, char isSHA256);
+int verify_rsa(FILE *f, int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh, char isSHA256);
 int64_t write_buf(int fd, void *buf, unsigned int size);
 int open_and_erase_mtd(unsigned int mtdId);
-int64_t calcMd5(unsigned char *a1, const char *a2);
+int64_t calcMd5(unsigned char *md5Output, const char *data);
 int64_t transpostGuid(uint8_t *a1, char *outbuf);
 int64_t get_ssh_key();
-int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileid, MiRomFile *fildhdr, FILE *f, void *userdata);
+int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, char *SN_str);
 
 //-------------------------------------------------------------------------
 // Data declarations
@@ -238,7 +238,24 @@ int util_check_model_idx(int16_t model_idx)
   }
   return result;
 #else
-  printf("%s\n", model_nr[model_idx]);
+	if ( model_idx < max_model_nr )
+	{
+	printf("%s\n", model_nr[model_idx]);
+	}
+	else if(model_idx==61){
+	  printf("RB06\n");
+	}
+	else if(model_idx==37){
+	  printf("RA70\n");
+	}
+	else
+	{
+	printf(
+	  "Illegal model: model_idx=%d,max_model_nr=%d \n",
+	  (unsigned int)model_idx,
+	  (unsigned int)max_model_nr);
+	}
+  
   return 0;
 #endif
 }
@@ -390,6 +407,7 @@ int load_image(FILE *f, int disableVerify)
   uint16_t v12; // [xsp+1076h] [xbp+1076h]
   unsigned int isSsh; // [xsp+1078h] [xbp+1078h]
   int verify_ret; // [xsp+107Ch] [xbp+107Ch]
+  char isSHA256;
 
   memset(sigbuf, 0, sizeof(sigbuf));
   v12 = -1;
@@ -397,8 +415,9 @@ int load_image(FILE *f, int disableVerify)
   len = 0;
   isSsh = 0;
   rewind(f);
-  ret = fread(&hdr, 1u, 0x30u, f);
-  if ( ret != 0x30 )
+  //ret = fread(&hdr, 1u, 0x30u, f);
+  //if ( ret != 0x30 )
+  if ( fread(&hdr, 1u, 0x38u, f) != 56 )//new
     return 0xFFFFFFFB;
   if ( hdr.magic != '1RDH' )
   {
@@ -411,6 +430,10 @@ int load_image(FILE *f, int disableVerify)
     fwrite("Model mismatch\n", 1u, 0xFu, stderr);
     return -22;
   }
+  if(model_idx==61)
+    isSHA256=1;
+  else
+    isSHA256=0;
   len = util_get_file_len(f);
   rewind(f);
   crcret = calc_crc32(f, 12, len - 12);
@@ -436,7 +459,7 @@ int load_image(FILE *f, int disableVerify)
     if ( sigsize[0] != ret )
       return -5;
     rewind(f);
-    verify_ret = j_verify_rsa(f, 12u, hdr.rsaLen - 12, sigbuf, sigsize[0], isSsh);
+    verify_ret = j_verify_rsa(f, 12u, hdr.rsaLen - 12, sigbuf, sigsize[0], isSsh, isSHA256);
   }
   if ( !verify_ret )
     return 0;
@@ -563,8 +586,9 @@ int command_extract_file(const char *filename, const char *sshFile, int disableV
     if ( !ret )
     {
       rewind(stream);
-      v12 = fread(&hdr, 1u, 0x30u, stream);
-      if ( v12 == 48 )
+      //v12 = fread(&hdr, 1u, 0x30u, stream);
+      //if ( v12 == 48 )
+	  if ( fread(&hdr, 1u, 0x38u, stream) == 56 )//new
       {
         v13 = hdr.romType;
         if ( hdr.romType == 12 )
@@ -874,7 +898,7 @@ uint32_t calc_crc32(FILE *f, int start, unsigned int size)
 }
 
 //----- (0000000000402E4C) ----------------------------------------------------
-int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh)
+int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh, char isSHA256)
 {
   int64_t result; // x0
   const EVP_MD *algo; // x0
@@ -903,7 +927,10 @@ int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh)
         if ( EVP_PKEY_set1_RSA(*ppkey, *pem) == 1 )
         {
           EVP_MD_CTX_init(ctx);
-          algo = EVP_sha1();
+          if(isSHA256)
+            algo = EVP_sha256();//for newer model
+          else
+            algo = EVP_sha1();
           if ( EVP_DigestInit_ex(ctx, algo, 0LL) == 1 )
           {
             result = 0LL;
@@ -947,13 +974,13 @@ int64_t init_pkey(EVP_MD_CTX *ctx, RSA **pem, EVP_PKEY **ppkey, int isSsh)
 }
 
 //----- (000000000040307C) ----------------------------------------------------
-int j_verify_rsa(FILE *f, unsigned int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh)
+int j_verify_rsa(FILE *f, unsigned int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh, char isSHA256)
 {
-  return verify_rsa(f, start, size, sigbuf, siglen, isSsh);
+  return verify_rsa(f, start, size, sigbuf, siglen, isSsh, isSHA256);
 }
 
 //----- (00000000004030C0) ----------------------------------------------------
-int verify_rsa(FILE *f, int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh)
+int verify_rsa(FILE *f, int start, unsigned int size, const unsigned char *sigbuf, unsigned int siglen, unsigned int isSsh, char isSHA256)
 {
   int result; // w0
   EVP_PKEY *pkey; // [xsp+30h] [xbp+30h] BYREF
@@ -971,7 +998,7 @@ int verify_rsa(FILE *f, int start, unsigned int size, const unsigned char *sigbu
   buf = malloc(0x10000u);
   if ( buf )
   {
-    v19 = init_pkey(ctx, &pem, &pkey, isSsh);
+    v19 = init_pkey(ctx, &pem, &pkey, isSsh, isSHA256);
     if ( v19 )
     {
       fwrite("malloc failed\n", 1u, 0xEu, stderr);
@@ -1067,17 +1094,17 @@ int open_and_erase_mtd(unsigned int mtdId)
 }
 
 //----- (00000000004034BC) ----------------------------------------------------
-int64_t calcMd5(unsigned char *a1, const char *a2)
+int64_t calcMd5(unsigned char *md5Output, const char *data)
 {
   size_t v2; // w0
   MD5_CTX v6; // [xsp+20h] [xbp+20h] BYREF
 
   if ( MD5_Init(&v6) )
   {
-    v2 = strlen(a2);
-    if ( MD5_Update(&v6, a2, v2) )
+    v2 = strlen(data);
+    if ( MD5_Update(&v6, data, v2) )
     {
-      if ( MD5_Final(a1, &v6) )
+      if ( MD5_Final(md5Output, &v6) )
         return 0LL;
       puts("MD5_Final error");
     }
@@ -1185,9 +1212,145 @@ int64_t get_ssh_key()
 }
 
 //----- (00000000004038A4) ----------------------------------------------------
-int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileid, MiRomFile *fildhdr, FILE *f, void *userdata)
+int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, char *SN_str)
 {
-  return 1;
+  int ret; // r4
+  unsigned int filesize; // r7
+  void *ptr; // r0
+  size_t decfileSize; // r4
+  FILE *decfileStream; // r5
+  FILE *stream; // r4
+  char *out; // [sp+8h] [bp-358h] BYREF
+  void *dest; // [sp+10h] [bp-350h]
+  int outl; // [sp+18h] [bp-348h] BYREF
+  int outl1; // [sp+20h] [bp-340h] BYREF
+  unsigned char key[16]; // [sp+24h] [bp-33Ch] BYREF
+  unsigned char iv[16]; // [sp+34h] [bp-32Ch] BYREF
+  char strBuf1[100]; // [sp+44h] [bp-31Ch] BYREF
+  char strBuf2[100]; // [sp+A8h] [bp-2B8h] BYREF
+  char snStr[100]; // [sp+10Ch] [bp-254h] BYREF
+  char guid1[100]; // [sp+170h] [bp-1F0h] BYREF
+  char guid2[100]; // [sp+1D4h] [bp-18Ch] BYREF
+  char Sn[260]; // [sp+238h] [bp-128h] BYREF
+  EVP_CIPHER_CTX *ctx;
+  ctx=EVP_CIPHER_CTX_new();
+
+  memset(key, 0, sizeof(key));
+  memset(iv, 0, sizeof(iv));
+  memset(strBuf1, 0, sizeof(strBuf1));
+  memset(strBuf2, 0, sizeof(strBuf2));
+  memset(snStr, 0, sizeof(snStr));
+  memset(guid1, 0, sizeof(guid1));
+  memset(guid2, 0, sizeof(guid2));
+  if ( fileId )
+    return 1;
+  filesize = fildhdr->filesize;
+  if ( filesize <= 7 || fildhdr->magic != 0xBABE )
+    return 0;
+  dest = malloc(fildhdr->filesize);
+  if ( dest )
+  {
+    ptr = malloc(filesize + 1);
+    if ( ptr )
+    {
+      memset(ptr, 0, filesize + 1);
+      if ( !SN_str )
+      {
+        memset(Sn, 0, 100u);
+        #ifdef ONDEVICE
+          stream = popen("nvram get SN", "r");
+        #else
+          stream = fopen("SN.txt", "r");
+        #endif
+        if ( stream )
+        {
+          (*((uint8_t*)&(fileId))) = (uint8_t)Sn;
+          while ( fgets(Sn, 100, stream) )
+            sscanf((const char *)Sn, "%s", snStr);
+        }
+        else
+        {
+          puts("Failed to run command");
+        }
+        SN_str = snStr;
+        printf("getsn %s\n", snStr);
+      }
+
+      transpostGuid("be39095eb72a-b89d-40df-626a-12c5a5c6", guid1);
+      transpostGuid("3b1d7f12ba84-ac27-4d18-2aa4-a9cdcbe0", guid2);
+      sprintf(strBuf1, "%s%s", SN_str, guid1);
+      sprintf(strBuf2, "%s%s", SN_str, guid2);
+      printf("key_str:%s\niv_str:%s\n",strBuf1,strBuf2);
+
+      calcMd5(key, strBuf1);
+      calcMd5(iv, strBuf2);
+      printf("key_md5:");
+      for ( char i = 0; i <= 16; ++i ) printf("%02x", key[i]);
+      printf("\niv_md5:");
+      for ( char i = 0; i < 16; ++i ) printf("%02x", iv[i]);
+      printf("\nalgo:aes_128_cbc\n");
+
+      if ( filesize == fread(dest, 1u, filesize, f) )
+      {
+        out = malloc(fildhdr->filesize);
+        EVP_CIPHER_CTX_init(ctx);
+        EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), 0, key, iv);
+        if ( EVP_DecryptUpdate(ctx, out, &outl, dest, filesize) )
+        {
+          EVP_DecryptFinal_ex(ctx, out+outl, &outl1);
+          memcpy(ptr, out, outl+outl1);
+          EVP_CIPHER_CTX_cleanup(ctx);
+          decfileSize = outl+outl1;
+        }
+        else
+        {
+          decfileSize = -1;
+        }
+        printf("encfileSize:%d\n",filesize);
+        printf("decfileSize:%d\n",decfileSize);
+        printf("filename: %s\n",fildhdr->name);
+        decfileStream = fopen(fildhdr->name, "w");
+        if ( decfileStream )
+        {
+          if ( !fwrite(ptr, decfileSize, 1u, decfileStream) || fflush(decfileStream) )
+          {
+            fwrite("fwrite failed\n", 1u, 0xEu, stderr);
+            ret = -5;
+          }
+          else
+          {
+            ret = 0;
+          }
+          fclose(decfileStream);
+        }
+        else
+        {
+          ret = -2;
+          fprintf(stderr, "can not open \"%s\" for writing\n", fildhdr->name);
+        }
+      }
+      else
+      {
+        ret = -5;
+      }
+      free(dest);
+      free(ptr);
+      free(out);
+      EVP_CIPHER_CTX_free(ctx);
+    }
+    else
+    {
+      fwrite("malloc failed\n", 1u, 0xEu, stderr);
+      ret = -12;
+      free(dest);
+    }
+  }
+  else
+  {
+    fwrite("malloc failed\n", 1u, 0xEu, stderr);
+    return -12;
+  }
+  return ret;
 }
 
 // nfuncs=134 queued=28 decompiled=28 lumina nreq=0 worse=0 better=0
