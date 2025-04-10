@@ -3,6 +3,6 @@ project(mkxqimage)
 
 find_package(OpenSSL REQUIRED)
 
-add_executable(mkxq mkxqimage.c)
+add_executable(mkxq source/mkxqimage.c)
 target_compile_options(mkxq PRIVATE -w)
 target_link_libraries(mkxq PRIVATE OpenSSL::SSL OpenSSL::Crypto)
