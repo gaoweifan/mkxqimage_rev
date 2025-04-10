@@ -67,7 +67,7 @@ int open_and_erase_mtd(unsigned int mtdId);
 int64_t calcMd5(unsigned char *md5Output, const char *data);
 int64_t transpostGuid(uint8_t *a1, char *outbuf);
 int64_t get_ssh_key();
-int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, char *SN_str);
+int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, void *SN_str);
 
 //-------------------------------------------------------------------------
 // Data declarations
@@ -247,6 +247,9 @@ int util_check_model_idx(int16_t model_idx)
 	}
 	else if(model_idx==37){
 	  printf("RA70\n");
+	}
+  else if(model_idx==32){
+	  printf("RA69\n");
 	}
 	else
 	{
@@ -1212,7 +1215,7 @@ int64_t get_ssh_key()
 }
 
 //----- (00000000004038A4) ----------------------------------------------------
-int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, char *SN_str)
+int extract_ssh_rom_callback(MiRomHdr *hdr, int64_t fileId, MiRomFile *fildhdr, FILE *f, void *SN_str)
 {
   int ret; // r4
   unsigned int filesize; // r7
