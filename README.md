@@ -7,6 +7,8 @@ The resverse engineering result of `mkxqimage`, which is used to extrat XiaoMi R
 3. add public_ssh.pem which is used to verify miwifi_ssh.bin
 
 ## Compile
-```
-gcc mkxqimage.c -lssl -lcrypto -omkxq -w
+```bash
+# gcc mkxqimage.c -lssl -lcrypto -omkxq -w
+cmake -S . -B build # configue
+cmake --build build # compile
 ```
