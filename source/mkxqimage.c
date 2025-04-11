@@ -398,7 +398,7 @@ int for_each_file(FILE *f, int (*callback)(MiRomHdr *hdr, int64_t fileid, MiRomF
 }
 
 //----- (0000000000401D08) ----------------------------------------------------
-int load_image(FILE *f, int disableVerify)
+int load_image(FILE *fptr, int disableVerify)
 {
   unsigned char sigbuf[4096]; // [xsp+20h] [xbp+20h] BYREF
   size_t sigsize[4]; // [xsp+1020h] [xbp+1020h] BYREF
@@ -411,6 +411,7 @@ int load_image(FILE *f, int disableVerify)
   unsigned int isSsh; // [xsp+1078h] [xbp+1078h]
   int verify_ret; // [xsp+107Ch] [xbp+107Ch]
   char isSHA256;
+  FILE *f = fptr;
 
   memset(sigbuf, 0, sizeof(sigbuf));
   v12 = -1;
